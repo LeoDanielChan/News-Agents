@@ -1,0 +1,19 @@
+services:
+  fastapi_agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_agent_dev
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/
+    command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+    networks:
+      - agent_network
+
+networks:
+  agent_network:
+    driver: bridge

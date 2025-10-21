@@ -1,0 +1,17 @@
+services:
+  fastapi_agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/
+    networks:
+      - agent_network
+
+networks:
+  agent_network:
+    driver: bridge

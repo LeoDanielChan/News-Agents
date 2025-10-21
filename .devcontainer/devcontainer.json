@@ -1,0 +1,20 @@
+{
+  "name": "news-agents-dev",
+  "dockerComposeFile": ["../docker-compose.dev.yml"],
+  "service": "fastapi_agent",
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "terminal.integrated.shell.linux": "/bin/bash",
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
+      }
+    }
+  },
+  "shutdownAction": "stopCompose"
+}

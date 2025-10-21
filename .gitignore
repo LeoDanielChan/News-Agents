@@ -1,0 +1,74 @@
+# ----------------------------------------------------------------------
+# Archivos específicos de Docker/Docker Compose
+# ----------------------------------------------------------------------
+
+# Variables de entorno secretas o locales que no deben ser públicas
+.env
+.env.*.local
+.env.local
+
+# Archivos de caché generados por Docker Compose o el CLI
+.docker/
+!/docker-compose.override.yml
+# Si usas un archivo 'override' para la configuración local, es mejor 
+# ignorar el .env y NO el override para que otros puedan usarlo como base,
+# pero el .env es más común de ignorar.
+
+# ----------------------------------------------------------------------
+# Archivos del sistema operativo
+# ----------------------------------------------------------------------
+# Archivos de macOS
+.DS_Store
+
+# Archivos de Linux/editores (ej. VIM)
+*~
+*.swp
+*.bak
+
+# ----------------------------------------------------------------------
+# Dependencias de Paquetes y Compilación (EJEMPLOS COMUNES)
+# Ajusta esto a tu lenguaje (Node, Python, PHP, etc.)
+# ----------------------------------------------------------------------
+
+# 1. Node.js (JavaScript/TypeScript)
+# -----------------------------------
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+# Si estás haciendo un build local
+dist/
+build/
+coverage/
+
+# 2. Python (Django, Flask)
+# -------------------------
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+# Entorno virtual de Python
+.venv/
+venv/
+env/
+
+# 3. PHP (Laravel, Symfony)
+# -------------------------
+vendor/
+# Para Symfony
+var/cache/
+var/log/
+# Para Laravel
+storage/*.key
+
+# ----------------------------------------------------------------------
+# Archivos que a veces se montan en contenedores pero son de host
+# ----------------------------------------------------------------------
+# Directorios donde se guardan uploads o archivos subidos
+# (si no deben ir en el repo)
+/uploads/
+/media/
+
+# Archivos de base de datos local (ej. SQLite)
+*.sqlite
+*.db

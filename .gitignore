@@ -1,6 +1,8 @@
 # ----------------------------------------------------------------------
 # Archivos específicos de Docker/Docker Compose
 # ----------------------------------------------------------------------
+adc.json
+.gcloud/
 
 # Variables de entorno secretas o locales que no deben ser públicas
 .env

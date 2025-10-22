@@ -1,4 +1,5 @@
 from google.adk.agents.llm_agent import Agent
+from google.adk.tools import google_search
 
 def get_current_time(city: str) -> dict:
   """Returns the current time in a specified city."""
@@ -10,5 +11,5 @@ root_agent = Agent(
   name='news_agent',
   description='A helpful assistant for user questions.',
   instruction='Answer user questions to the best of your knowledge',
-  tools=[get_current_time]
+  tools=[get_current_time, google_search]
 )

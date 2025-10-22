@@ -2,7 +2,7 @@
 .gitignore
 
 node_modules/
-
+adc.json
 venv/
 .venv/
 

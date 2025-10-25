@@ -5,6 +5,7 @@ node_modules/
 adc.json
 venv/
 .venv/
+news-agent.json
 
 docker-compose.yml
 docker-compose.*.yml

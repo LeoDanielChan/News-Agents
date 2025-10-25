@@ -1,3 +1,4 @@
 fastapi[standard]
-uvicorn
-google-adk
+uvicorn==0.38.0
+firebase-admin==6.9.0
+google-adk==1.17.0

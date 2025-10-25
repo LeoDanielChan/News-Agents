@@ -3,6 +3,7 @@
 # ----------------------------------------------------------------------
 adc.json
 .gcloud/
+news-agent.json
 
 # Variables de entorno secretas o locales que no deben ser públicas
 .env

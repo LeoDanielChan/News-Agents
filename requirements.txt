@@ -2,3 +2,4 @@ fastapi[standard]
 uvicorn==0.38.0
 firebase-admin==6.9.0
 google-adk==1.17.0
+worldnewsapi==2.2.0

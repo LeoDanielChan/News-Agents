@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from google.adk.cli.fast_api import get_fast_api_app
 from news_agent.agent import run_agent_query
+from routes import worldnewsapi_router
 import os
 
 TOKEN = os.getenv("TOKEN")
@@ -36,4 +37,5 @@ async def start_chat(request: RequestChat):
     else:
       raise e  # Re-raise other runtime errors
       
+app.include_router(worldnewsapi_router.router_worldnewsapi)
   

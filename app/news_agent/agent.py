@@ -4,11 +4,11 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.code_executors import BuiltInCodeExecutor
 from google.genai import types
+from config.db import db
+from google.cloud import firestore
 
 AGENT_NAME = "news_agent"
 APP_NAME = "example"
-USER_ID = "user1234"
-SESSION_ID = "session_code_exec_async"
 GEMINI_MODEL = "gemini-2.5-flash"
 
 root_agent = Agent(
@@ -22,25 +22,28 @@ root_agent = Agent(
 # Session and Runner
 session_service = InMemorySessionService()
 
-async def get_runner_and_session():
+async def get_runner_and_session(user_id: str, session_id: str):
   session = await session_service.create_session(
-    app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
+    app_name=APP_NAME,
+    user_id=user_id,
+    session_id=session_id
   )
   
   runner = Runner(
-    agent=root_agent, app_name=APP_NAME,
+    agent=root_agent,
+    app_name=APP_NAME,
     session_service=session_service
   )
   
   return runner, session
 
-async def call_agent_async(runner_instance, session_id, query):
+async def call_agent_async(runner_instance: Runner, session_id: str, query: str, user_id: str) -> str:
   content = types.Content(role="user", parts=[types.Part(text=query)])
   
   final_response_text = "No final text response captured."
   try:
     async for event in runner_instance.run_async(
-      user_id=USER_ID, session_id=session_id, new_message=content
+      user_id=user_id, session_id=session_id, new_message=content
     ):
       print(f"Event ID: {event.id}, Author: {event.author}")
       has_specific_part = False
@@ -90,11 +93,28 @@ async def call_agent_async(runner_instance, session_id, query):
   
   return final_response_text
 
-async def run_agent_query(query):
-  global RUNNER, SESSION
-  RUNNER, SESSION = await get_runner_and_session()
+async def run_agent_query(user_id: str, query: str, session_id: str) -> str:
+  runner, session = await get_runner_and_session(user_id, session_id)
+  agent_result_text = await call_agent_async(runner, session.id, query, user_id)
+  
+  await save_chat_history_to_firestore(user_id, session_id, query, agent_result_text)
 
-  return await call_agent_async(RUNNER, SESSION.id, query)
+  return agent_result_text
 
 
-
+async def save_chat_history_to_firestore(user_id, session_id, user_message, agent_response):
+  doc_ref = db.collection(u'chats').document(user_id).collection(u'sessions').document(session_id)
+  
+  await doc_ref.collection(u'messages').add({
+    u'author': u'user',
+    u'text': user_message,
+    u'timestamp': firestore.SERVER_TIMESTAMP,
+  })
+  
+  await doc_ref.collection(u'messages').add({
+    u'author': u'agent',
+    u'text': agent_response,
+    u'timestamp': firestore.SERVER_TIMESTAMP,
+  })
+  
+  print(f"Historial guardado en Firestore para User: {user_id}, Session: {session_id}")

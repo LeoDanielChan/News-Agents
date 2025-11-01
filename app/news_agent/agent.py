@@ -8,22 +8,23 @@ from news_agent.tools import tools
 AGENT_NAME = "news_agent"
 APP_NAME = "example"
 USER_ID = "user1234"
-SESSION_ID = "session_code_exec_async"
+SESSION_ID = "session_code_exec_"
 GEMINI_MODEL = "gemini-2.5-flash"
 
 root_agent = Agent(
   name=AGENT_NAME,
   model=GEMINI_MODEL,
   description='A specialized assistant that answers user questions about news by searching articles, extracting content, and finding sources. It can also perform general web searches.',
-  instruction="""You are an expert news assistant. Your primary goal is to answer user requests using the provided tools.
+instruction="""You are an expert news assistant. Your primary goal is to answer user requests using the provided tools.
 
 **Tool Selection Rules:**
 1.  **Prioritize News Tools:** Always prefer the specialized news tools (`search_news`, `extract_news`, etc.) for any news-related query.
 2.  **`search_news` (Main Tool):** Use this for general searches like "Find news about Tesla" or "What's the latest on the economy in Spanish?".
 3.  **`extract_news`:** Use this *only* when the user provides a *specific article URL* and asks for a summary, the text, or the author.
-4.  **`extract_news_links`:** Use this *only* when the user provides a *homepage URL* (e.g., "cnn.com") and asks for "headlines" or "all links on this page".
+4.  **`extract_news_links` (Updated):** Use this when the user provides *any URL* (like a homepage or a specific article) and asks to "find all links on that page", "extract the links", or "see what other articles are linked".
 5.  **`search_news_sources`:** Use this when the user asks to find a source ID (e.g., "What's the ID for 'BBC News'?").
-6.  **`Google Search` (Fallback):** Use this *only* if the user asks for general web information, not for news (e.g., "What's the capital of France?"), or if they are not satisfied with the news tool results.
+
+**(Rule for Google Search removed to prevent 400 INVALID_ARGUMENT error)**
 
 **Response Handling Rules (CRITICAL):**
 You MUST inspect the dictionary returned by every tool.

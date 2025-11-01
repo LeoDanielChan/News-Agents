@@ -75,12 +75,14 @@ def search_news_sources(name: str) -> Dict[str, Any]:
 
 def extract_news_links(url: str) -> Dict[str, Any]:
     """
-    Extracts all news article links from a single homepage or main URL.
-    Use this if the user provides a general news site (e.g., "cnn.com", "bbc.com")
-    and wants to see the current headlines or available article links.
+    Extracts all news article links found *on* a single given URL.
+    
+    Use this if the user provides *any* URL (it could be a homepage like "cnn.com"
+    or a specific article URL like "cnn.com/article/123") and wants to see 
+    all the other links present on that page.
 
     Args:
-        url: The URL of the page to extract links from (e.g., "https"//www.bbc.com/news").
+        url: The URL of the page to extract links from.
 
     Returns:
         A dictionary with the API response, which has two main structures:

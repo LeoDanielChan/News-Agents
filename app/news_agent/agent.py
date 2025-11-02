@@ -6,6 +6,8 @@ from google.adk.code_executors import BuiltInCodeExecutor
 from google.genai import types
 from config.db import db
 from google.cloud import firestore
+from starlette.concurrency import run_in_threadpool
+
 
 AGENT_NAME = "news_agent"
 APP_NAME = "example"
@@ -45,7 +47,6 @@ async def call_agent_async(runner_instance: Runner, session_id: str, query: str,
     async for event in runner_instance.run_async(
       user_id=user_id, session_id=session_id, new_message=content
     ):
-      print(f"Event ID: {event.id}, Author: {event.author}")
       has_specific_part = False
       
       if event.content and event.content.parts:
@@ -66,52 +67,55 @@ async def call_agent_async(runner_instance: Runner, session_id: str, query: str,
             
           # Also print any text parts found in any event for debugging
           elif part.text and not part.text.isspace():
-            print(f"  Text: '{part.text.strip()}'")
+            pass
+            #print(f"  Text: '{part.text.strip()}'")
             # Do not set has_specific_part=True here, as we want the final response logic below
             
       # --- Check for final response AFTER specific parts ---
       # Only consider it final if it doesn't have the specific code parts we just handled
       if not has_specific_part and event.is_final_response():
-        print("\n--- Final Response Event Detected ---", event)
         if (
           event.content
           and event.content.parts
           and event.content.parts[0].text
         ):
           final_response_text = event.content.parts[0].text.strip()
-          print(f"==> Final Agent Response: {final_response_text}")
+          #print(f"==> Final Agent Response: {final_response_text}")
           break
           
         else:
-          print(
-            "==> Final Agent Response: [No text content in final event]"
-          )
+          pass
+          #print(
+          #  "==> Final Agent Response: [No text content in final event]"
+          #)
 
   except Exception as e:
     print(f"ERROR during agent run: {e}")
     final_response_text = f"Error: {e}"
+    
+  
+  print("Agent run completed.")
   
   return final_response_text
 
 async def run_agent_query(user_id: str, query: str, session_id: str) -> str:
   runner, session = await get_runner_and_session(user_id, session_id)
   agent_result_text = await call_agent_async(runner, session.id, query, user_id)
-  
-  await save_chat_history_to_firestore(user_id, session_id, query, agent_result_text)
+  await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, agent_result_text)
 
   return agent_result_text
 
 
-async def save_chat_history_to_firestore(user_id, session_id, user_message, agent_response):
+def save_chat_history_to_firestore(user_id, session_id, user_message, agent_response):
   doc_ref = db.collection(u'chats').document(user_id).collection(u'sessions').document(session_id)
   
-  await doc_ref.collection(u'messages').add({
+  doc_ref.collection(u'messages').add({
     u'author': u'user',
     u'text': user_message,
     u'timestamp': firestore.SERVER_TIMESTAMP,
   })
   
-  await doc_ref.collection(u'messages').add({
+  doc_ref.collection(u'messages').add({
     u'author': u'agent',
     u'text': agent_response,
     u'timestamp': firestore.SERVER_TIMESTAMP,

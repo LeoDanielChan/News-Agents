@@ -16,6 +16,6 @@ def extract_news_links(url: str):
 def extract_news(url: str):
     return worldnewsapi_client.extract_news(url)
 
-@router_worldnewsapi.get('/search_news')
-def search_news(params: worldnewsapi_client.Search_News = Depends()):
-    return worldnewsapi_client.search_news(params)
+# @router_worldnewsapi.get('/search_news')
+# def search_news(params:):
+#     return worldnewsapi_client.search_news()

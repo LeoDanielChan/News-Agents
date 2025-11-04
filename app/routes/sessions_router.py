@@ -1,7 +1,7 @@
 from datetime import timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from config.db import db
-from interfaces.IChat import SessionData, List
+from interfaces.IChat import DeleteSessionResponse, SessionData, List, SessionHistoryResponse
 from starlette.concurrency import run_in_threadpool
 from utils.getUser import get_current_user_uid
 from google.cloud import firestore
@@ -28,7 +28,7 @@ async def list_sessions(user_id: str = Depends(get_current_user_uid)):
     
     return sessions
 
-@session_router.get("/sessions/{session_id}/history")
+@session_router.get("/sessions/{session_id}/history", response_model=SessionHistoryResponse)
 async def get_session_history(session_id: str, user_id: str = Depends(get_current_user_uid)):
   messages_ref = db.collection(u'chats').document(user_id).collection(u'sessions').document(session_id).collection(u'messages').order_by(u'timestamp').stream()
   
@@ -46,11 +46,11 @@ async def get_session_history(session_id: str, user_id: str = Depends(get_curren
       status_code=status.HTTP_404_NOT_FOUND, 
       detail="Sesión no encontrada o vacía."
     )
-      
-  return {"session_id": session_id, "messages": history}
+
+  return SessionHistoryResponse(session_id=session_id, messages=history)
 
 
-@session_router.delete("/sessions/{session_id}")
+@session_router.delete("/sessions/{session_id}", response_model=DeleteSessionResponse)
 async def delete_session(session_id: str, user_id: str = Depends(get_current_user_uid)):
   try:
     session_ref = db.collection(u'chats').document(user_id).collection(u'sessions').document(session_id)

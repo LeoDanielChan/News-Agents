@@ -16,3 +16,15 @@ class SessionData(BaseModel):
   session_id: str
   title: str
   created_at: datetime
+  
+class MessageHistory(BaseModel):
+  author: str
+  text: str
+  timestamp: datetime
+    
+class SessionHistoryResponse(BaseModel):
+  session_id: str
+  messages: List[MessageHistory]
+  
+class DeleteSessionResponse(BaseModel):
+  message: str

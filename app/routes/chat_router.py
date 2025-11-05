@@ -14,6 +14,8 @@ async def start_chat(request: RequestChat, user_id: str = Depends(get_current_us
     if not request.session_id:
       print("Creating a new session...")
       current_session_id = str(uuid.uuid4())
+      print(current_session_id)
+      print(len(current_session_id))
       await run_in_threadpool(
         create_new_session_in_firestore,
         user_id,
@@ -22,6 +24,7 @@ async def start_chat(request: RequestChat, user_id: str = Depends(get_current_us
       )
     else:
       print("Using existing session...")
+      print(len(request.session_id))
       current_session_id = request.session_id
       
     agent_result = await run_agent_query(

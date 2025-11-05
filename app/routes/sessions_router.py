@@ -19,6 +19,7 @@ async def list_sessions(user_id: str = Depends(get_current_user_uid)):
     data = doc.to_dict()
     
     created_at_dt = data.get('created_at').astimezone(timezone.utc)
+    print(f"Session ID of firebase: {doc.id}", len(doc.id))
     sessions.append(SessionData(
       user_id=user_id, 
       session_id=doc.id,
@@ -26,12 +27,12 @@ async def list_sessions(user_id: str = Depends(get_current_user_uid)):
       created_at=created_at_dt
     ))
     
-    return sessions
+  return sessions
 
 @session_router.get("/sessions/{session_id}/history", response_model=SessionHistoryResponse)
 async def get_session_history(session_id: str, user_id: str = Depends(get_current_user_uid)):
   messages_ref = db.collection(u'chats').document(user_id).collection(u'sessions').document(session_id).collection(u'messages').order_by(u'timestamp').stream()
-  
+  print("Fetching session history for Session ID:", session_id, len(session_id))
   history = []
   for doc in messages_ref:
     data = doc.to_dict()

@@ -55,11 +55,14 @@ You MUST inspect the dictionary returned by every tool.
 session_service = InMemorySessionService()
 
 async def get_runner_and_session(user_id: str, session_id: str):
+  print("Getting runner and session...", len(session_id))
   session = await session_service.create_session(
     app_name=APP_NAME,
     user_id=user_id,
     session_id=session_id
   )
+  print("Session created with ID:", session.id)
+  print(len(session.id))
   
   runner = Runner(
     agent=root_agent,
@@ -129,7 +132,9 @@ async def call_agent_async(runner_instance: Runner, session_id: str, query: str,
   return final_response_text
 
 async def run_agent_query(user_id: str, query: str, session_id: str) -> str:
+  print("Running agent query...", len(session_id))
   runner, session = await get_runner_and_session(user_id, session_id)
+  print("Calling agent asynchronously...", len(session.id))
   agent_result_text = await call_agent_async(runner, session.id, query, user_id)
   await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, agent_result_text)
 
@@ -150,5 +155,7 @@ def save_chat_history_to_firestore(user_id, session_id, user_message, agent_resp
     u'text': agent_response,
     u'timestamp': firestore.SERVER_TIMESTAMP,
   })
+  
+  print(len(session_id), "Saving chat history to Firestore...")
   
   print(f"Historial guardado en Firestore para User: {user_id}, Session: {session_id}")

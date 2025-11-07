@@ -7,7 +7,6 @@ from news_agent.tools import tools
 from config.db import db
 from google.cloud import firestore
 from starlette.concurrency import run_in_threadpool
-from types import SimpleNamespace
 
 
 AGENT_NAME = "news_agent"
@@ -57,40 +56,13 @@ session_service = InMemorySessionService()
 
 async def get_runner_and_session(user_id: str, session_id: str):
   print("Getting runner and session...", len(session_id))
-  try:
-    session = await session_service.create_session(
-      app_name=APP_NAME,
-      user_id=user_id,
-      session_id=session_id
-    )
-    print("Session created with ID:", session.id)
-    print(len(session.id))
-
-  except Exception as e:
-    msg = str(e)
-    if "AlreadyExists" in msg or "already exists" in msg:
-      print(f"Session with id {session_id} already exists; attempting to retrieve it...")
-      session = None
-      if hasattr(session_service, "get_session"):
-        try:
-          session = await session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
-        except TypeError:
-          try:
-            session = await session_service.get_session(session_id)
-          except Exception:
-            try:
-              session = await session_service.get_session(user_id, session_id)
-            except Exception:
-              session = None
-        except Exception:
-          session = None
-
-      if not session:
-        session = SimpleNamespace(id=session_id)
-        print("Using fallback session object with id:", session.id)
-
-    else:
-      raise
+  session = await session_service.create_session(
+    app_name=APP_NAME,
+    user_id=user_id,
+    session_id=session_id
+  )
+  print("Session created with ID:", session.id)
+  print(len(session.id))
   
   runner = Runner(
     agent=root_agent,

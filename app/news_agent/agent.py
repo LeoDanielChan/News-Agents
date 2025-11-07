@@ -1,13 +1,11 @@
+import json
 from google.adk.agents.llm_agent import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.adk.code_executors import BuiltInCodeExecutor
 from google.genai import types
-from news_agent.tools import tools
-from config.db import db
-from google.cloud import firestore
+from news_agent.tools import tools, fact_check_tools
 from starlette.concurrency import run_in_threadpool
-
+from utils.saveHistory import save_chat_history_to_firestore
 
 AGENT_NAME = "news_agent"
 APP_NAME = "example"
@@ -16,60 +14,64 @@ GEMINI_MODEL = "gemini-2.5-flash"
 root_agent = Agent(
   name=AGENT_NAME,
   model=GEMINI_MODEL,
-  description='A specialized assistant that answers user questions about news by searching articles, extracting content, and finding sources. It can also perform general web searches.',
-instruction="""You are an expert news assistant. Your primary goal is to answer user requests using the provided tools.
-
-**Tool Selection Rules:**
-1.  **Prioritize News Tools:** Always prefer the specialized news tools (`search_news`, `extract_news`, etc.) for any news-related query.
-2.  **`search_news` (Main Tool):** Use this for general searches like "Find news about Tesla" or "What's the latest on the economy in Spanish?".
-3.  **`extract_news`:** Use this *only* when the user provides a *specific article URL* and asks for a summary, the text, or the author.
-4.  **`extract_news_links` (Updated):** Use this when the user provides *any URL* (like a homepage or a specific article) and asks to "find all links on that page", "extract the links", or "see what other articles are linked".
-5.  **`search_news_sources`:** Use this when the user asks to find a source ID (e.g., "What's the ID for 'BBC News'?").
-
-**(Rule for Google Search removed to prevent 400 INVALID_ARGUMENT error)**
-
-**Response Handling Rules (CRITICAL):**
-You MUST inspect the dictionary returned by every tool.
-
-* **For `search_news` and `search_news_sources`:**
-    * Check the `'available'` key. If `available == 0`, you MUST inform the user "No results were found for your query." Do not treat this as an error.
-    * If `available > 0`, present the information from the `'news'` or `'sources'` list.
-
-* **For `extract_news_links`:**
-    * Check the `'news_links'` list. If it's empty (`[]`), you MUST inform the user "I couldn't find any article links on that URL."
-
-* **For `extract_news`:**
-    * Check the `'title'` and `'text'` fields. If they contain error messages (like "Error," or "malformed request"), you MUST inform the user the URL might be incorrect or inaccessible.
-
-* **For ALL Tools:**
-    * If a tool returns `{"status": "error", "error_message": "..."}`, it was a system failure. Apologize and report the error message to the user.
-
-**Final Answer:**
-* Do not just output raw JSON.
-* Summarize the findings, format lists clearly, and answer the user's question in a helpful, conversational tone.
-""",
+  description='Assistant that finds news articles based on a user query.',
+  instruction="""Your only task is to use the 'search_news' tool to find a maximum of 3 articles 
+  related to the user's query and return the raw JSON result. Do not summarize or comment on the results.""",
   tools=tools
+)
+
+fact_checker_agent = Agent(
+  name="fact_checker_agent",
+  model=GEMINI_MODEL,
+  description='Assistant that verifies the truthfulness of a given news article text or link.',
+  instruction="""You are an expert fact-checker. Given an article URL or content, 
+  you MUST use the 'google_search' tool to find other reliable sources 
+  to confirm or deny the information. Your final output must be:
+  'VERDICT: [TRUE/FALSE/UNCERTAIN]. Evidence: [Summary of your findings with citations].'""",
+  tools=fact_check_tools
 )
 
 # Session and Runner
 session_service = InMemorySessionService()
 
-async def get_runner_and_session(user_id: str, session_id: str):
-  print("Getting runner and session...", len(session_id))
-  session = await session_service.create_session(
-    app_name=APP_NAME,
-    user_id=user_id,
-    session_id=session_id
-  )
-  print("Session created with ID:", session.id)
-  print(len(session.id))
+async def get_runner_and_session(user_id: str, session_id: str, agent: Agent):
+  session = None
+  try:
+    session = await session_service.create_session(
+      app_name=APP_NAME,
+      user_id=user_id,
+      session_id=session_id
+    )
+    
+  except Exception as e:
+    msg = str(e)
+    
+    if "AlreadyExists" in msg or "already exists" in msg:
+      
+      try:
+        session = await session_service.get_session(
+          app_name=APP_NAME, 
+          user_id=user_id, 
+          session_id=session_id
+        )
+
+      except Exception as retrieve_error:
+        print(f"ERROR: Fallo al recuperar la sesión existente: {retrieve_error}")
+        raise retrieve_error
+
+    else:
+      raise
+    
+  if session is None:
+    raise RuntimeError("Failed to obtain a session object. Check the inner exception details.")
   
   runner = Runner(
-    agent=root_agent,
-    app_name=APP_NAME,
-    session_service=session_service
-  )
+      agent=agent,
+      app_name=APP_NAME,
+      session_service=session_service
+    )
   
+    
   return runner, session
 
 async def call_agent_async(runner_instance: Runner, session_id: str, query: str, user_id: str) -> str:
@@ -83,7 +85,7 @@ async def call_agent_async(runner_instance: Runner, session_id: str, query: str,
       has_specific_part = False
       
       if event.content and event.content.parts:
-        for part in event.content.parts:  # Iterate through all parts
+        for part in event.content.parts:
           if part.executable_code:
             print(
               f"  Debug: Agent generated code:\n```python\n{part.executable_code.code}\n```"
@@ -131,31 +133,48 @@ async def call_agent_async(runner_instance: Runner, session_id: str, query: str,
   
   return final_response_text
 
-async def run_agent_query(user_id: str, query: str, session_id: str) -> str:
-  print("Running agent query...", len(session_id))
-  runner, session = await get_runner_and_session(user_id, session_id)
-  print("Calling agent asynchronously...", len(session.id))
-  agent_result_text = await call_agent_async(runner, session.id, query, user_id)
-  await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, agent_result_text)
+async def run_verification_pipeline(user_id: str, query: str, session_id: str) -> str:
+  runner_1, session_1 = await get_runner_and_session(user_id, session_id, root_agent)
+  runner_2, session_2 = await get_runner_and_session(user_id, session_id, fact_checker_agent)  
 
-  return agent_result_text
+  link_finder_result = await call_agent_async(runner_1, session_1.id, query, user_id)
+  
+  article_urls = []
+  
+  try:
+    news_data = json.loads(link_finder_result)
 
+    if news_data.get("available", 0) > 0 and "news" in news_data:
+      for article in news_data["news"]:
+        url = article.get("url")
+        if url:
+          article_urls.append(url)
+    else:
+      return "El Agente 1 no encontró resultados de noticias para verificar."
+    
+  except json.JSONDecodeError:
+    print(f"ERROR: El resultado del Agente 1 no es un JSON válido: {link_finder_result}")
+    return f"Error: El Agente 1 no pudo encontrar noticias o su respuesta no fue legible: {link_finder_result[:100]}..."
+  
+  except Exception as e:
+    print(f"ERROR FATAL al procesar la respuesta del Agente 1: {e}")
+    return "Error inesperado al procesar la respuesta del primer agente."
+  
+  if not article_urls:
+    return "El Agente 1 encontró resultados, pero no se pudo extraer ninguna URL válida."
+  
+  print(f"URLs a verificar: {article_urls}")
 
-def save_chat_history_to_firestore(user_id, session_id, user_message, agent_response):
-  doc_ref = db.collection(u'chats').document(user_id).collection(u'sessions').document(session_id)
+  final_verdicts = []
   
-  doc_ref.collection(u'messages').add({
-    u'author': u'user',
-    u'text': user_message,
-    u'timestamp': firestore.SERVER_TIMESTAMP,
-  })
+  for url in article_urls[:3]:
+    fact_check_prompt = f"Verifica la veracidad de la noticia en este enlace: {url}"
+
+    verdict = await call_agent_async(runner_2, session_2.id, fact_check_prompt, user_id)
+    final_verdicts.append(f"Resultado para {url}:\n{verdict}")
+    
+  final_response_text = "\n\n".join(final_verdicts)
   
-  doc_ref.collection(u'messages').add({
-    u'author': u'agent',
-    u'text': agent_response,
-    u'timestamp': firestore.SERVER_TIMESTAMP,
-  })
+  await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, final_response_text)
   
-  print(len(session_id), "Saving chat history to Firestore...")
-  
-  print(f"Historial guardado en Firestore para User: {user_id}, Session: {session_id}")
+  return final_response_text

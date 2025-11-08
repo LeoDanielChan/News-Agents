@@ -15,8 +15,10 @@ root_agent = Agent(
   name=AGENT_NAME,
   model=GEMINI_MODEL,
   description='Assistant that finds news articles based on a user query.',
-  instruction="""Your only task is to use the 'search_news' tool to find a maximum of 3 articles 
-  related to the user's query and return the raw JSON result. Do not summarize or comment on the results.""",
+  instruction="""Your sole task is to strictly use the 'search_news' tool to find a maximum of 3 articles 
+  related to the user's query. After the tool execution, 
+  you MUST return the raw JSON response (including the 'available' and 'news' keys) exactly as you received it. DO NOT summarize or comment on the results.
+  Your final output must be the pure JSON string.""",
   tools=tools
 )
 
@@ -138,32 +140,52 @@ async def run_verification_pipeline(user_id: str, query: str, session_id: str) -
   runner_2, session_2 = await get_runner_and_session(user_id, session_id, fact_checker_agent)  
 
   link_finder_result = await call_agent_async(runner_1, session_1.id, query, user_id)
-  
+  # print(f"DEBUG | Respuesta RAW del Agente 1 (JSON): {link_finder_result}")
   article_urls = []
   
   try:
-    news_data = json.loads(link_finder_result)
+    # 1. LIMPIEZA DE STRING: Quitar las vallas de código (```json y ```)
+    cleaned_json_string = link_finder_result.strip()
+    
+    if cleaned_json_string.startswith("```json"):
+      # Quita el encabezado de Markdown
+      cleaned_json_string = cleaned_json_string.replace("```json", "", 1).strip()
+      
+    if cleaned_json_string.endswith("```"):
+      # Quita el cierre de Markdown
+      cleaned_json_string = cleaned_json_string.rstrip("`").strip()
 
+    # 2. DECODIFICACIÓN JSON (raw_data ahora es un dict)
+    raw_data = json.loads(cleaned_json_string) 
+    
+    # 3. Acceso al diccionario anidado (CORRECCIÓN FINAL)
+    news_data = raw_data.get("search_news_response", {})
+    
+    # El resto de la lógica de depuración y extracción permanece igual
+    # print(f"DEBUG | Datos de noticias: {news_data}")
     if news_data.get("available", 0) > 0 and "news" in news_data:
+      # print(f"DEBUG | Artículos encontrados: {len(news_data['news'])}")
       for article in news_data["news"]:
         url = article.get("url")
+        # print(f"DEBUG | url {url}")
         if url:
+          # print(f"DEBUG | agrgear url: {url}")
           article_urls.append(url)
     else:
       return "El Agente 1 no encontró resultados de noticias para verificar."
     
   except json.JSONDecodeError:
-    print(f"ERROR: El resultado del Agente 1 no es un JSON válido: {link_finder_result}")
+    # print(f"ERROR: El resultado del Agente 1 no es un JSON válido: {link_finder_result}")
     return f"Error: El Agente 1 no pudo encontrar noticias o su respuesta no fue legible: {link_finder_result[:100]}..."
   
   except Exception as e:
-    print(f"ERROR FATAL al procesar la respuesta del Agente 1: {e}")
+    # print(f"ERROR FATAL al procesar la respuesta del Agente 1: {e}")
     return "Error inesperado al procesar la respuesta del primer agente."
   
   if not article_urls:
     return "El Agente 1 encontró resultados, pero no se pudo extraer ninguna URL válida."
   
-  print(f"URLs a verificar: {article_urls}")
+  # print(f"URLs a verificar: {article_urls}")
 
   final_verdicts = []
   
@@ -175,6 +197,6 @@ async def run_verification_pipeline(user_id: str, query: str, session_id: str) -
     
   final_response_text = "\n\n".join(final_verdicts)
   
-  await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, final_response_text)
+  # await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, final_response_text)
   
   return final_response_text

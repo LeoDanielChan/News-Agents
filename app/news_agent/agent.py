@@ -25,7 +25,7 @@ root_agent = Agent(
   1.  Analyze the user's query to identify the 3-5 most important keywords or the core topic.
   2.  If the query is a question like "Is it true that...", extract the main claim (e.g., "Earth will explode").
   3.  If the query is a news headline, extract the key entities and concepts.
-  4.  You MUST call the 'search_news' tool using the refined keywords in the 'text' parameter.
+  4.  You MUST call the 'search_news' tool using these refined keywords in the 'text' parameter.
   5.  You MUST set the 'number' parameter to 3.
   6.  You MUST return ONLY the raw JSON output from the tool call.
   
@@ -114,92 +114,96 @@ async def get_runner_and_session(user_id: str, session_id: str, agent: Agent):
 async def call_agent_async(runner_instance: Runner, session_id: str, query: str, user_id: str) -> str:
   content = types.Content(role="user", parts=[types.Part(text=query)])
   
-  tool_output_string = None
   final_response_text = "Error: No final text response captured." # Default
   try:
     async for event in runner_instance.run_async(
-        user_id=user_id, session_id=session_id, new_message=content
+      user_id=user_id, session_id=session_id, new_message=content
     ):
+      has_specific_part = False
+      
       if event.content and event.content.parts:
         for part in event.content.parts:
           if part.executable_code:
             print(f"  Debug: Agent generated code: {part.executable_code.code}")
-            
-          # --- CAPTURA DE SALIDA DE HERRAMIENTA (Para Agente 1) ---
+            has_specific_part = True
           elif part.code_execution_result:
             print(f"  Debug: Code Execution Result: {part.code_execution_result.outcome}")
-            if part.code_execution_result.outcome == "OK":
-              tool_output_string = json.dumps(part.code_execution_result.output)
-              print(f"  Debug: Captured tool output string: {tool_output_string[:200]}...")
-            else:
-              tool_output_string = json.dumps({"status": "error", "error_message": "Tool execution failed."})
-            break
-          
-          elif part.text and not part.text.isspace():
-            final_response_text = part.text.strip()
-      
-      if tool_output_string:
-        print("Agent run completed (Tool output captured).")
-        return tool_output_string
-      
-      if event.is_final_response():
-        if final_response_text and not tool_output_string:
-          print(f"==> Final Agent Response (Text): {final_response_text}")
-          return final_response_text
-        else:
-          print("==> Final Agent Response: [No text, or tool output was already handled]")
+            has_specific_part = True
+            
+      # Capturamos la respuesta final de texto
+      if not has_specific_part and event.is_final_response():
+        if (
+          event.content
+          and event.content.parts
+          and event.content.parts[0].text
+        ):
+          final_response_text = event.content.parts[0].text.strip()
+          print(f"==> Final Agent Response (Raw Text): {final_response_text}")
           break
-          
+        else:
+          print("==> Final Agent Response: [No text content in final event]")
+          break
+
   except Exception as e:
     print(f"ERROR during agent run: {e}")
-    return json.dumps({"status": "error", "error_message": f"Exception during agent run: {e}"})
-  
-  print("Agent run completed (Fell through loop).")
-  
-  if final_response_text:
-    print("Returning final conversational text (fallback).")
-    return final_response_text
-  
-  return json.dumps({"status": "error", "error_message": "Agent did not produce a tool output or a text response."})
-  
-  
+    final_response_text = f"Error: {e}"
+    
+  print("Agent run completed.")
+  return final_response_text
+
+
 async def run_verification_pipeline(user_id: str, query: str, session_id: str) -> str:
   
+  # --- 1. Limpieza y Detección de Intención ---
   cleaned_query = query.strip().rstrip('?').strip()
+  # Regex para encontrar URLs
   url_match = re.search(r"https://?[\w./-?&=]+", cleaned_query)
   
+  # Lista de palabras clave para chat general
   general_chat_keywords = ['hola', 'resumen', 'dame las noticias', 'qué haces', 'buenos días', 'qué puedes hacer']
   
+  # Caso 1: Chat General (Tu Lógica #1)
   is_general_chat = any(keyword in cleaned_query.lower() for keyword in general_chat_keywords)
+  # Prevenimos que "resumen de https://..." sea tratado como general
   if is_general_chat and not url_match: 
     print("DEBUG: Detectada consulta general. Respondiendo directamente.")
     response_text = "Soy un agente de verificación de noticias. Por favor envíame una pregunta específica (ej. '¿Es verdad que...') o un enlace para verificar."
+    # Guardamos el historial de esta interacción
     # await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, response_text)
     return response_text
 
+  # --- 2. Preparar la búsqueda ---
   runner_1, session_1 = await get_runner_and_session(user_id, session_id, root_agent)
   runner_2, session_2 = await get_runner_and_session(user_id, session_id, fact_checker_agent) 
   
   search_query_for_agent1 = ""
-  original_article_data = None
-  article_data_list = []
+  original_article_data = None # Para guardar el artículo de la URL
+  article_data_list = [] # Lista final para el Agente 2
 
   try:
+    # Caso 2: Query con URL (Tu Lógica #3)
     if url_match:
       url = url_match.group(0)
       print(f"DEBUG: URL detectada. Extrayendo contenido de: {url}")
       
       try:
+        # 1. Extraer contenido de la URL original
+        # Usamos run_in_threadpool porque extract_news es sincrónica (no-async)
         article = await run_in_threadpool(extract_news, url=url)
         
-        if article and article.get("title") and article.get("text"):
-          search_query_for_agent1 = article['title']
+        # 2. Validar la respuesta de extract_news
+        # Vimos en tu log (21:34:58) que una URL mala puede devolver: 'Try searching for it instead'
+        if (article and article.get("title") and 
+            article.get("text") and 
+            "try searching for it instead" not in article.get("title", "").lower()):
+          
+          search_query_for_agent1 = article['title'] # Usamos el título para buscar artículos similares
           original_article_data = {
-            "url": article.get("url"),
-            "title": article.get("title"),
-            "text": article.get("text", "")[:1500]
+              "url": article.get("url"),
+              "title": article.get("title"),
+              "text": article.get("text", "")[:1500] # Limitar el texto
           }
-          article_data_list.append(original_article_data) 
+          article_data_list.append(original_article_data) # Añadir el original a la lista
           print(f"DEBUG: Título extraído: '{search_query_for_agent1}'. Buscando artículos similares...")
         else:
           print(f"ERROR: No se pudo extraer contenido de la URL: {url}. Respuesta API: {article}")
@@ -208,38 +212,53 @@ async def run_verification_pipeline(user_id: str, query: str, session_id: str) -
         print(f"Error extrayendo URL individual {url}: {e}")
         return f"Error al procesar la URL: {e}"
 
+    # Caso 3: Query de Texto Plano (Tu Lógica #2)
     else:
       print("DEBUG: Query de texto detectada. Buscando artículos...")
       search_query_for_agent1 = cleaned_query
+      # No hay 'original_article_data' en este caso
 
+    # --- 3. Ejecutar Agente 1 (Search) ---
     print(f"Iniciando Agente 1 con query de búsqueda: '{search_query_for_agent1}'")
     agent_1_result = await call_agent_async(runner_1, session_1.id, search_query_for_agent1, user_id)
     print(f"DEBUG | Respuesta RAW del Agente 1: {agent_1_result[:500]}...")
 
+    # --- 4. Parsear respuesta del Agente 1 ---
+    # El Agente 1 SÓLO debe devolver JSON de search_news
+    
+    # Limpiamos por si el agente falló y devolvió texto + JSON
     match = re.search(r'\{.*\}', agent_1_result, re.DOTALL)
     if not match:
-      print(f"ERROR: No se encontró JSON en la respuesta del Agente 1. Respuesta: {agent_1_result}")
-      return agent_1_result
+        print(f"ERROR: No se encontró JSON en la respuesta del Agente 1. Respuesta: {agent_1_result}")
+        # Esto es lo que viste en tus logs (ej. "The search returned 0 news articles.")
+        # Ahora el agente 2 lo verá, pero es mejor manejarlo aquí.
+        if "No final text response captured" in agent_1_result:
+            return "Error: El Agente 1 no produjo una respuesta."
+        return f"El Agente 1 no devolvió noticias: {agent_1_result}" # Devolvemos el texto de error del agente
 
     json_string = match.group(0)
     news_data = json.loads(json_string)
 
+    # La respuesta DEBERÍA ser de search_news.
+    # Puede estar anidada (por el ADK) o no.
     search_response = news_data.get("search_news_response", news_data)
 
     if search_response.get("status") == "error":
-      raise Exception(f"La API de noticias devolvió un error: {search_response.get('error_message')}")
+        raise Exception(f"La API de noticias devolvió un error: {search_response.get('error_message')}")
 
     if "news" in search_response and search_response.get("available", 0) > 0:
-      print("DEBUG: Procesando respuesta de 'search_news'")
-      for article in search_response["news"]:
-        if article.get("url") and (not original_article_data or article.get("url") != original_article_data["url"]):
-          article_data_list.append({
-            "url": article.get("url"),
-            "title": article.get("title", "No Title"),
-            "text": article.get("text", "")[:1500]
-          })
+        print("DEBUG: Procesando respuesta de 'search_news'")
+        for article in search_response["news"]:
+            # Evitar añadir el artículo original si ya lo teníamos
+            if article.get("url") and (not original_article_data or article.get("url") != original_article_data["url"]):
+                article_data_list.append({
+                    "url": article.get("url"),
+                    "title": article.get("title", "No Title"),
+                    "text": article.get("text", "")[:1500]
+                })
     else:
-      print("DEBUG: 'search_news' no devolvió artículos adicionales.")
+        print("DEBUG: 'search_news' no devolvió artículos adicionales.")
+        # Si no encontramos artículos similares, continuamos solo con el original (si existe)
 
   except json.JSONDecodeError as e:
     print(f"ERROR: El resultado del Agente 1 no es un JSON válido: {e}. String parseado: {json_string[:200]}...")
@@ -248,20 +267,23 @@ async def run_verification_pipeline(user_id: str, query: str, session_id: str) -
     print(f"ERROR FATAL en el pipeline del Agente 1: {e}")
     return f"Error inesperado al procesar la respuesta del primer agente: {e}"
   
+  # Si después de todo, no tenemos NINGÚN artículo (ni original ni de búsqueda)
   if not article_data_list:
     return "No se encontraron artículos de noticias relevantes para esa consulta."
   
   print(f"Total de artículos para Agente 2: {len(article_data_list)}. URLs: {[a['url'] for a in article_data_list]}")
 
+  # --- 5. Ejecutar Agente 2 (Fact-Checker) ---
   fact_check_prompt = f"User query: '{query}'\n\nPlease analyze the following articles and determine the veracity of the user's query:\n\n"
   for i, article in enumerate(article_data_list): # Ya está limitado (1 original + 3 búsqueda, o solo 3 de búsqueda)
-    fact_check_prompt += f"--- Article {i+1} ---\n"
-    fact_check_prompt += f"URL: {article['url']}\n"
-    fact_check_prompt += f"Title: {article['title']}\n"
-    fact_check_prompt += f"Text Snippet: {article['text']}...\n\n"
+      fact_check_prompt += f"--- Article {i+1} ---\n"
+      fact_check_prompt += f"URL: {article['url']}\n"
+      fact_check_prompt += f"Title: {article['title']}\n"
+      fact_check_prompt += f"Text Snippet: {article['text']}...\n\n"
 
   print(f"Enviando prompt consolidado al Agente 2 (Fact-Checker)...")
   
+  # Llamar al Agente 2 UNA SOLA VEZ con toda la información
   final_response_text = await call_agent_async(runner_2, session_2.id, fact_check_prompt, user_id)
   
   print(f"Respuesta final del Agente 2: {final_response_text}")
@@ -269,7 +291,6 @@ async def run_verification_pipeline(user_id: str, query: str, session_id: str) -
   # await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, final_response_text)
   
   return final_response_text
-
 
 
 

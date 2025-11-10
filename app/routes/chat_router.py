@@ -35,9 +35,11 @@ async def start_chat(request: RequestChat, user_id: str = Depends(get_current_us
     )
     
   except Exception as e:
-    print(f"ERROR FATAL AL EJECUTAR AGENTE (SESSION ID: {current_session_id}): {type(e).__name__} - {e}")
+    session_info = f" (SESSION ID: {current_session_id})" if current_session_id else ""
+    print(f"ERROR FATAL AL EJECUTAR AGENTE{session_info}: {type(e).__name__} - {e}")
+    
     
     raise HTTPException(
       status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-      detail=f"Fallo al reanudar la sesión con el agente: {type(e).__name__}. Intenta iniciar una nueva conversación."
+      detail="Ocurrió un error interno al procesar tu solicitud. Por favor, intenta de nuevo o inicia una nueva conversación."
     )

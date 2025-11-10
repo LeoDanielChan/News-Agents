@@ -13,12 +13,12 @@ async def start_chat(request: RequestChat, user_id: str = Depends(get_current_us
   try:
     if not request.session_id:
       current_session_id = str(uuid.uuid4())
-      #await run_in_threadpool(
-      #  create_new_session_in_firestore,
-      #  user_id,
-      #  current_session_id,
-      #  request.prompt
-      #)
+      await run_in_threadpool(
+        create_new_session_in_firestore,
+        user_id,
+        current_session_id,
+        request.prompt
+      )
     else:
       current_session_id = request.session_id.strip()
       

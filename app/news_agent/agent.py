@@ -168,7 +168,7 @@ async def run_verification_pipeline(user_id: str, query: str, session_id: str) -
     print("DEBUG: General query detected. Responding directly.")
     response_text = "I am a news verification agent. Please send me a specific question (e.g., 'Is it true that...') or a link to verify."
 
-    # await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, response_text)
+    await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, response_text)
     return response_text
 
   runner_1, session_1 = await get_runner_and_session(user_id, session_id, root_agent)
@@ -269,7 +269,7 @@ async def run_verification_pipeline(user_id: str, query: str, session_id: str) -
   
   print(f"Final response from Agent 2: {final_response_text}")
 
-  # await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, final_response_text)
+  await run_in_threadpool(save_chat_history_to_firestore, user_id, session_id, query, final_response_text)
   
   return final_response_text
 

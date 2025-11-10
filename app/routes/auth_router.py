@@ -12,9 +12,9 @@ async def register_user(credentials: UserCredentials):
             email=credentials.email,
             password=credentials.password
         )
-        return {"message": "Usuario registrado exitosamente.", "uid": user.uid}
+        return {"message": "User registered successfully.", "uid": user.uid}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
-            detail=f"Fallo en el registro: {e}"
+            detail=f"Registration failed: {e}"
         )

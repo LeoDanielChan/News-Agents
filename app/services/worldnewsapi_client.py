@@ -153,23 +153,23 @@ def extract_news(url: str) -> Dict[str, Any]:
             return {"status": "error", "error_message": str(e)}
 
 def search_news(
-    text: Optional[str] = None,
-    language: Optional[str] = None,
-    news_sources: Optional[str] = None,
-    earliest_publish_date: Optional[str] = None,
-    latest_publish_date: Optional[str] = None,
-    categories: Optional[str] = None,
-    authors: Optional[str] = None,
-    entities: Optional[str] = None,
-    source_country: Optional[str] = None,
-    min_sentiment: Optional[str] = None,
-    max_sentiment: Optional[str] = None,
-    location_filter: Optional[str] = None,
-    sort: Optional[str] = None,
-    sort_direction: Optional[str] = None,
-    offset: Optional[int] = None,
-    number: Optional[int] = None,
-    text_match_indexes: Optional[str] = None
+    text: Optional[str],
+    language: Optional[str],
+    news_sources: Optional[str],
+    earliest_publish_date: Optional[str],
+    latest_publish_date: Optional[str],
+    categories: Optional[str],
+    authors: Optional[str],
+    entities: Optional[str],
+    source_country: Optional[str],
+    min_sentiment: Optional[str],
+    max_sentiment: Optional[str],
+    location_filter: Optional[str],
+    sort: Optional[str],
+    sort_direction: Optional[str],
+    offset: Optional[int],
+    number: Optional[int],
+    text_match_indexes: Optional[str]
 ) -> Dict[str, Any]:
     """
     Searches for news articles matching query text and various filters.

@@ -18,4 +18,4 @@ def save_chat_history_to_firestore(user_id, session_id, user_message, agent_resp
   
   print(len(session_id), "Saving chat history to Firestore...")
   
-  print(f"Historial guardado en Firestore para User: {user_id}, Session: {session_id}")
+  print(f"History saved: {user_id}, Session: {session_id}")

@@ -23,7 +23,7 @@ async def list_sessions(user_id: str = Depends(get_current_user_uid)):
     sessions.append(SessionData(
       user_id=user_id, 
       session_id=doc.id,
-      title=data.get('title', 'Conversación sin título'), 
+      title=data.get('title', 'Untitled Conversation'), 
       created_at=created_at_dt
     ))
     
@@ -45,7 +45,7 @@ async def get_session_history(session_id: str, user_id: str = Depends(get_curren
   if not history:
     raise HTTPException(
       status_code=status.HTTP_404_NOT_FOUND, 
-      detail="Sesión no encontrada o vacía."
+      detail="Session not found or has no messages."
     )
 
   return SessionHistoryResponse(session_id=session_id, messages=history)
@@ -58,13 +58,13 @@ async def delete_session(session_id: str, user_id: str = Depends(get_current_use
     deleted_messages_count = await run_in_threadpool(delete_collection_and_document, session_ref)
     
     return {
-      "message": f"Sesión '{session_id}' y {deleted_messages_count} mensajes eliminados correctamente."
+      "message": f"Session '{session_id}' and {deleted_messages_count} messages deleted successfully."
     }
     
   except Exception as e:
     raise HTTPException(
       status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-      detail=f"Fallo al eliminar la sesión: {type(e).__name__}"
+      detail=f"Failed to delete session: {type(e).__name__}"
     )
     
 def delete_collection_and_document(session_ref):

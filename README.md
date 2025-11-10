@@ -1,4 +1,4 @@
-# News-Agents — README
+# News-Agents
 
 This repository contains a FastAPI-based service that can be run locally with Docker Compose for development and deployed to Google Cloud Run for production. The instructions below explain how to run the project locally, build and push the container image, deploy to Cloud Run, and connect Cloud Run to Google Secret Manager to protect sensitive API keys and secrets.
 

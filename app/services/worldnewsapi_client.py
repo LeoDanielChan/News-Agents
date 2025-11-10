@@ -14,6 +14,7 @@ configuration = worldnewsapi.Configuration(
 
 configuration.api_key['apiKey'] = os.getenv("WORLDNEWSAPI_API_KEY")
 configuration.api_key['headerApiKey'] = os.getenv("WORLDNEWSAPI_API_KEY")
+print("WorldNewsAPI Client initialized.", configuration.api_key)
 
 # class Search_News(BaseModel):
 #     text: str | None = None # str | The text to match in the news content (at least 3 characters, maximum 100 characters). By default all query terms are expected, you can use an uppercase OR to search for any terms, e.g. tesla OR ford. You can also exclude terms by putting a minus sign (-) in front of the term, e.g. tesla -ford. For exact matches just put your term in quotes, e.g. \"elon musk\". (optional)
